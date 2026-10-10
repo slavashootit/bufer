@@ -2,7 +2,12 @@
 
 Менеджер буфера обміну для macOS. Пам'ятає все, що ти копіюєш, і віддає це назад за **⌘⇧V**.
 
-### [⬇︎ Скачати Bufer для Mac](https://github.com/slavashootit/bufer/releases/latest/download/Bufer.dmg)
+### [⬇︎ Скачати Bufer для Mac](https://github.com/slavashootit/bufer/releases/latest/download/Bufer.dmg) · [Сайт з демо](https://slavashootit.github.io/bufer/)
+
+Або одною командою в Терміналі (ставить і оновлює, без попередження macOS):
+```bash
+curl -fsSL https://raw.githubusercontent.com/slavashootit/bufer/main/install.sh | bash
+```
 
 macOS 14 або новіша, Apple Silicon і Intel.
 
