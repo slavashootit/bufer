@@ -1,10 +1,12 @@
 name: Release
 
-# Push a tag like v0.3.0 to build Bufer on a GitHub Mac and publish a release with the DMG.
+# Builds Bufer on a GitHub Mac and publishes a release with Bufer.dmg.
+# Start it from Actions → Release → Run workflow (version comes from Info.plist),
+# or push a tag like v0.4.0.
 on:
+  workflow_dispatch:
   push:
     tags: ["v*"]
-  workflow_dispatch:
 
 permissions:
   contents: write
@@ -15,11 +17,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build universal app
+      - name: Version
+        id: version
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          if [[ "$GITHUB_REF" != refs/tags/* ]]; then VERSION=""; fi
-          scripts/package.sh "$VERSION"
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Info.plist)"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build universal app
+        run: scripts/package.sh "${{ steps.version.outputs.version }}"
 
       - name: Upload build
         uses: actions/upload-artifact@v4
@@ -30,10 +39,11 @@ jobs:
             dist/Bufer.zip
 
       - name: Publish release
-        if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/Bufer.dmg dist/Bufer.zip \
-            --title "Bufer $GITHUB_REF_NAME" \
+          gh release create "v$VERSION" dist/Bufer.dmg dist/Bufer.zip \
+            --target "$GITHUB_SHA" \
+            --title "Bufer $VERSION" \
             --notes-file RELEASE_NOTES.md

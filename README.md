@@ -57,8 +57,8 @@ scripts/package.sh    # універсальний Bufer.dmg у dist/
 ```
 
 ## Новий реліз
-```bash
-git tag v0.4.0 && git push origin v0.4.0
-```
-GitHub сам збере Bufer на своєму Маці й викладе `Bufer.dmg` у Releases. Посилання «Скачати» вгорі
-завжди веде на останню версію.
+1. Підніми версію в `Info.plist` (`CFBundleShortVersionString`, наприклад `0.4`) і запуш.
+2. GitHub → **Actions → Release → Run workflow**.
+
+GitHub сам збере Bufer на своєму Маці й викладе `Bufer.dmg` у Releases. Посилання «Скачати»
+вгорі завжди веде на останню версію. Можна й тегом: `git tag v0.4 && git push origin v0.4`.
