@@ -37,6 +37,7 @@ final class ClipboardMonitor {
     }
 
     func start(interval: TimeInterval = 0.5) {
+        observeKadr()
         timer?.invalidate()
         let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.check() }
@@ -51,12 +52,63 @@ final class ClipboardMonitor {
         lastChangeCount = pasteboard.changeCount
     }
 
+    /// Kadr marks its screenshots with this type and posts this notification after each write.
+    private static let kadrSourceType = "com.slava.kadr.source"
+    private static let kadrDidWrite = Notification.Name("com.slava.kadr.clipboardDidWrite")
+    private static let kadrBundleID = "com.slava.kadr"
+
+    /// An app that clears the pasteboard and fills it a moment later (encoding a big image in
+    /// between) bumps `changeCount` while the board is still empty. Keep looking for this long
+    /// before accepting that the change really was "cleared".
+    private static let emptyGrace: TimeInterval = 2
+    private var emptySince: Date?
+    private var emptyCount = -1
+    private var observing = false
+
+    private func observeKadr() {
+        guard !observing else { return }
+        observing = true
+        DistributedNotificationCenter.default().addObserver(
+            forName: Self.kadrDidWrite, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.check() }
+        }
+    }
+
     private func check() {
         let count = pasteboard.changeCount
         guard count != lastChangeCount else { return }
+
+        // Still empty: do not mark this change as seen yet, look again shortly.
+        if (pasteboard.pasteboardItems ?? []).isEmpty {
+            if emptyCount != count {
+                emptyCount = count
+                emptySince = Date()
+            }
+            if let since = emptySince, Date().timeIntervalSince(since) < Self.emptyGrace {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                    MainActor.assumeIsolated { self?.check() }
+                }
+                return
+            }
+        }
+        emptySince = nil
+        emptyCount = -1
+
+        guard !isPaused else {
+            lastChangeCount = count
+            return
+        }
+        let capture = read()
+        // The board changed again while we were reading: what we got may be a mix, read it afresh.
+        guard pasteboard.changeCount == count else {
+            DispatchQueue.main.async { [weak self] in
+                MainActor.assumeIsolated { self?.check() }
+            }
+            return
+        }
         lastChangeCount = count
-        guard !isPaused, let capture = read() else { return }
-        onCapture(capture)
+        if let capture { onCapture(capture) }
     }
 
     private func read() -> Capture? {
@@ -68,8 +120,16 @@ final class ClipboardMonitor {
            Self.excludedApps.contains(id) || Prefs.excludedApps.contains(id) {
             return nil
         }
-        let appID = app?.bundleIdentifier
-        let appName = app?.localizedName
+        var appID = app?.bundleIdentifier
+        var appName = app?.localizedName
+        // A screenshot belongs to Kadr, not to whatever window happened to be in front.
+        // Asked for directly as well: the cached type list can lag behind a write that
+        // followed `clearContents()` within the same change count.
+        if types.contains(Self.kadrSourceType)
+            || pasteboard.data(forType: NSPasteboard.PasteboardType(Self.kadrSourceType)) != nil {
+            appID = Self.kadrBundleID
+            appName = "Kadr"
+        }
 
         // Files first: Finder also puts file names as plain text.
         if let urls = pasteboard.readObjects(
