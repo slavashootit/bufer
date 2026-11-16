@@ -26,7 +26,20 @@ enum Paster {
         pb.clearContents()
 
         if items.count > 1 {
-            // Several items paste as one text, one item per line.
+            // Several screenshots or files go as a list of files: one ⌘V inserts them all,
+            // oldest first, so a series lands in the order it was taken.
+            let urls = items.sorted { $0.created < $1.created }.flatMap { item -> [URL] in
+                switch item.kind {
+                case .image: return item.imagePath.map { [URL(fileURLWithPath: $0)] } ?? []
+                case .files: return item.files.map { URL(fileURLWithPath: $0) }
+                case .text: return []
+                }
+            }.filter { FileManager.default.fileExists(atPath: $0.path) }
+            if !urls.isEmpty, !plain {
+                pb.writeObjects(urls.map { $0 as NSURL })
+                return
+            }
+            // Otherwise several items paste as one text, one item per line.
             let text = items.compactMap { item -> String? in
                 switch item.kind {
                 case .text: return item.text

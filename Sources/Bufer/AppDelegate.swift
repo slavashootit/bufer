@@ -52,6 +52,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         registerHotKeys(warnIfTaken: true)
         _ = Paster.hasAccess(prompt: true)
 
+        // Kadr's menu has an "Історія буфера" item that opens this panel.
+        DistributedNotificationCenter.default().addObserver(
+            forName: Notification.Name("com.slava.bufer.showPanel"), object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.panel.show() }
+        }
+
         // Age-based cleanup also has to run while Bufer just sits in the menu bar.
         let timer = Timer(timeInterval: 3600, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.applyRetention() }
