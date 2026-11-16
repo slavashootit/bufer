@@ -24,7 +24,9 @@ struct PanelView: View {
                     }
                 }
                 Divider()
-                Text("↩ вставити · ⌥↩ простим текстом · ⇧клік позначити · пробіл перегляд · ⇥ розділи · правий клік — ще")
+                Text(model.marked.isEmpty
+                     ? "↩ вставити · ⇧клік позначити кілька · пробіл перегляд · ⇥ розділи · правий клік — ще"
+                     : "↩ вставити всі \(model.marked.count) разом · ⌘C скопіювати · Esc зняти позначки")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -70,20 +72,39 @@ struct PanelView: View {
         } else {
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(spacing: 2) {
-                        ForEach(Array(model.items.enumerated()), id: \.element.id) { index, item in
-                            ClipRow(item: item, index: index,
-                                    isSelected: index == model.selection,
-                                    isMarked: model.isMarked(item))
-                                .id(item.id)
-                                .overlay(DragClickArea(
-                                    onClick: { flags in onPick(index, flags) },
-                                    menu: { menuFor(item) },
-                                    payload: { dragItems(item) }
-                                ))
+                    if model.gridColumns > 1 {
+                        // Screenshots are told apart by looking, not reading: big tiles.
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: model.gridColumns),
+                                  spacing: 8) {
+                            ForEach(Array(model.items.enumerated()), id: \.element.id) { index, item in
+                                ImageTile(item: item, index: index,
+                                          isSelected: index == model.selection,
+                                          isMarked: model.isMarked(item))
+                                    .id(item.id)
+                                    .overlay(DragClickArea(
+                                        onClick: { flags in onPick(index, flags) },
+                                        menu: { menuFor(item) },
+                                        payload: { dragItems(item) }
+                                    ))
+                            }
                         }
+                        .padding(10)
+                    } else {
+                        LazyVStack(spacing: 2) {
+                            ForEach(Array(model.items.enumerated()), id: \.element.id) { index, item in
+                                ClipRow(item: item, index: index,
+                                        isSelected: index == model.selection,
+                                        isMarked: model.isMarked(item))
+                                    .id(item.id)
+                                    .overlay(DragClickArea(
+                                        onClick: { flags in onPick(index, flags) },
+                                        menu: { menuFor(item) },
+                                        payload: { dragItems(item) }
+                                    ))
+                            }
+                        }
+                        .padding(6)
                     }
-                    .padding(6)
                 }
                 .onChange(of: model.selection) { _, newValue in
                     if model.items.indices.contains(newValue) {
@@ -313,6 +334,62 @@ struct ClipRow: View {
         }
         parts.append(Self.relative.localizedString(for: item.created, relativeTo: Date()))
         return parts.joined(separator: " · ")
+    }
+
+    private static let relative: RelativeDateTimeFormatter = {
+        let f = RelativeDateTimeFormatter()
+        f.locale = Locale(identifier: "uk_UA")
+        f.unitsStyle = .short
+        return f
+    }()
+}
+
+/// One screenshot in the image grid.
+struct ImageTile: View {
+    let item: ClipItem
+    let index: Int
+    let isSelected: Bool
+    let isMarked: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            ZStack(alignment: .topTrailing) {
+                RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.primary.opacity(0.06))
+                if let thumb = item.imagePath.flatMap(Thumbnails.thumb) {
+                    Image(nsImage: thumb.image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .padding(3)
+                }
+                HStack(spacing: 4) {
+                    if item.pinned { Image(systemName: "pin.fill").font(.caption2) }
+                    if isMarked {
+                        Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor)
+                    } else if index < 9 {
+                        Text("⌘\(index + 1)").font(.caption2.monospacedDigit())
+                    }
+                }
+                .padding(.horizontal, 6).padding(.vertical, 3)
+                .background(Capsule().fill(.regularMaterial))
+                .padding(5)
+            }
+            .frame(height: 104)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(isSelected || isMarked ? Color.accentColor : Color.clear, lineWidth: 2)
+            )
+            HStack(spacing: 5) {
+                AppIconView(bundleID: item.appID).frame(width: 13, height: 13)
+                Text(Self.relative.localizedString(for: item.created, relativeTo: Date()))
+                if let ocr = item.ocr, !ocr.isEmpty { Text("· є текст") }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+        }
+        .padding(4)
+        .animation(.spring(response: 0.22, dampingFraction: 0.8), value: isSelected)
     }
 
     private static let relative: RelativeDateTimeFormatter = {

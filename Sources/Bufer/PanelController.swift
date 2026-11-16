@@ -35,6 +35,9 @@ final class PanelModel: ObservableObject {
         self.store = store
     }
 
+    /// The image section shows a grid; everything else is a one-column list.
+    var gridColumns: Int { scope == .category(.image) ? 3 : 1 }
+
     var selected: ClipItem? {
         items.indices.contains(selection) ? items[selection] : nil
     }
@@ -343,9 +346,17 @@ final class PanelController: NSObject, NSWindowDelegate {
             }
         case kVK_DownArrow:
             if shift { model.markSelected() }
-            model.move(1)
+            model.move(model.gridColumns)
             if shift { model.markSelected() }
         case kVK_UpArrow:
+            if shift { model.markSelected() }
+            model.move(-model.gridColumns)
+            if shift { model.markSelected() }
+        case kVK_RightArrow where model.gridColumns > 1 && model.query.isEmpty:
+            if shift { model.markSelected() }
+            model.move(1)
+            if shift { model.markSelected() }
+        case kVK_LeftArrow where model.gridColumns > 1 && model.query.isEmpty:
             if shift { model.markSelected() }
             model.move(-1)
             if shift { model.markSelected() }

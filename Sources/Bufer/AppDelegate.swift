@@ -311,8 +311,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return item
     }
 
+    private static let recentTag = 7001
+
+    /// The five latest items sit right in the menu: one click pastes into the app in front.
     func menuWillOpen(_ menu: NSMenu) {
         pauseItem.state = monitor.isPaused ? .on : .off
+        pauseItem.title = monitor.isPaused ? "Запис на паузі — продовжити" : "Пауза запису"
+        for old in menu.items where old.tag == Self.recentTag { menu.removeItem(old) }
+        let target = NSWorkspace.shared.frontmostApplication
+        let latest = store.fetch(query: "", scope: .all, limit: 5)
+        guard !latest.isEmpty else { return }
+        var index = 0
+        func insert(_ item: NSMenuItem) {
+            item.tag = Self.recentTag
+            menu.insertItem(item, at: index)
+            index += 1
+        }
+        insert(.sectionHeader(title: "Останні — клік вставляє"))
+        for clip in latest {
+            let title: String
+            switch clip.kind {
+            case .image: title = "Знімок · \(clip.appName ?? "")"
+            default:
+                let line = clip.preview.replacingOccurrences(of: "\n", with: " ")
+                title = line.count > 46 ? String(line.prefix(46)) + "…" : line
+            }
+            let entry = ActionMenuItem(title, symbol: clip.category.symbol) { [weak self] in
+                self?.execute(PasteRequest(items: [clip], plain: false), target: target)
+            }
+            if clip.kind == .image, let thumb = clip.imagePath.flatMap(Thumbnails.thumb)?.image.copy() as? NSImage {
+                let size = thumb.representations.first.map { CGSize(width: $0.pixelsWide, height: $0.pixelsHigh) } ?? CGSize(width: 3, height: 2)
+                thumb.size = NSSize(width: 34 * size.width / max(1, size.height), height: 34)
+                if thumb.size.width > 70 { thumb.size = NSSize(width: 70, height: 70 * size.height / max(1, size.width)) }
+                entry.image = thumb
+            }
+            insert(entry)
+        }
+        insert(.separator())
     }
 
     @objc private func showPanel() {
