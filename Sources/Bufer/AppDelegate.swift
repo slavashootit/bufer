@@ -16,6 +16,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var pauseItem: NSMenuItem!
     private var showItem: NSMenuItem?
     private var savesSinceCleanup = 0
+    static let updater = Updater(.init(repo: "slavashootit/bufer", bundleID: "com.slava.bufer", assetSuffix: ".zip"))
+    private var updateItem: NSMenuItem!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {
@@ -51,6 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         setUpStatusItem()
         registerHotKeys(warnIfTaken: true)
         _ = Paster.hasAccess(prompt: true)
+        Self.updater.start()
 
         // Kadr's menu has an "Історія буфера" item that opens this panel.
         DistributedNotificationCenter.default().addObserver(
@@ -286,6 +289,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         pauseItem = item("Пауза запису", #selector(togglePause))
         menu.addItem(pauseItem)
         menu.addItem(.separator())
+        updateItem = item("Перевірити оновлення", #selector(updateAction))
+        menu.addItem(updateItem)
         let settingsItem = item("Налаштування…", #selector(openSettings))
         settingsItem.keyEquivalent = ","
         menu.addItem(settingsItem)
@@ -314,7 +319,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private static let recentTag = 7001
 
     /// The five latest items sit right in the menu: one click pastes into the app in front.
+    @objc private func updateAction() {
+        let updater = Self.updater
+        if updater.available != nil { updater.install() } else { Task { await updater.check() } }
+    }
+
+    private func refreshUpdateItem() {
+        let updater = Self.updater
+        if let release = updater.available {
+            switch updater.phase {
+            case .installing(let text): updateItem.title = text
+            case .failed(let text): updateItem.title = "Оновити до \(release.version) (минулого разу: \(text))"
+            default: updateItem.title = "⬆︎ Є оновлення — оновити до \(release.version)"
+            }
+        } else {
+            updateItem.title = updater.phase == .checking ? "Перевіряю оновлення…" : "Перевірити оновлення · \(Updater.current)"
+        }
+    }
+
     func menuWillOpen(_ menu: NSMenu) {
+        refreshUpdateItem()
         pauseItem.state = monitor.isPaused ? .on : .off
         pauseItem.title = monitor.isPaused ? "Запис на паузі — продовжити" : "Пауза запису"
         for old in menu.items where old.tag == Self.recentTag { menu.removeItem(old) }

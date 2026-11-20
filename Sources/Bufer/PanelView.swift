@@ -125,6 +125,7 @@ struct SidebarView: View {
     var body: some View {
         VStack(spacing: 0) {
             entries
+            UpdateButton(updater: AppDelegate.updater)
             Divider()
             Button(action: onSettings) {
                 HStack(spacing: 8) {
@@ -519,5 +520,44 @@ enum AppIcons {
         let icon = NSWorkspace.shared.icon(forFile: url.path)
         cache.setObject(icon, forKey: bundleID as NSString)
         return icon
+    }
+}
+
+
+/// "Є оновлення" above Settings; hidden while Bufer is up to date.
+struct UpdateButton: View {
+    @ObservedObject var updater: Updater
+
+    var body: some View {
+        if let release = updater.available {
+            Divider()
+            Button(action: { updater.install() }) {
+                HStack(spacing: 8) {
+                    Image(systemName: "arrow.down.circle.fill").foregroundStyle(Color.accentColor)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(title(release.version)).fontWeight(.semibold)
+                        if case .failed(let text) = updater.phase {
+                            Text(text).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                        }
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(isInstalling)
+        }
+    }
+
+    private var isInstalling: Bool {
+        if case .installing = updater.phase { return true }
+        return false
+    }
+
+    private func title(_ version: String) -> String {
+        if case .installing(let text) = updater.phase { return text }
+        return "Оновити до \(version)"
     }
 }
